@@ -1,0 +1,91 @@
+# Reusable floor component: `ci` (JS/TS) — runs tests if a test dir/file exists, else import/build-smoke.
+# Part of the fleet-floor (greploop posture-B). Called via `uses:` + an immutable SHA.
+# Emits a check-run whose internal job name is the literal floor component `ci` (frozen contract).
+#
+# 🔴 D-2 fix (spec Pass-1 Blocker 2): the real-vs-weak decision keys off a PATH signal — "does a test
+# directory / *.test.* file exist?" — the SAME signal derive_strength(lang="js-ts") sees in a tree
+# listing. NOT the package.json `test` script (content, invisible to the tree read), so the predictor
+# and this workflow can never drift. A contract test binds them on js-sample (AC-P4b-4).
+name: floor-js-ci
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        description: "Node version for the runner."
+        type: string
+        default: "20"
+      working-directory:
+        description: "Dir containing package.json."
+        type: string
+        default: "."
+      install:
+        description: "Install command; default = npm ci if a lockfile, else npm install, else skip."
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    name: ci
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+
+      - name: Install deps
+        env:
+          INSTALL_CMD: ${{ inputs.install }}
+        run: |
+          set -euo pipefail
+          if [ -n "$INSTALL_CMD" ]; then
+            echo "custom install: $INSTALL_CMD"
+            eval "$INSTALL_CMD"
+          elif [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
+            npm ci || npm install || echo "::warning::npm install had problems; continuing"
+          elif [ -f pnpm-lock.yaml ]; then
+            corepack enable && pnpm install --frozen-lockfile || pnpm install || echo "::warning::pnpm install had problems"
+          elif [ -f yarn.lock ]; then
+            corepack enable && yarn install --frozen-lockfile || yarn install || echo "::warning::yarn install had problems"
+          elif [ -f package.json ]; then
+            npm install || echo "::warning::npm install had problems; continuing"
+          else
+            echo "no package.json; nothing to install"
+          fi
+
+      - name: Run tests (path-signal) or smoke
+        run: |
+          set -euo pipefail
+          # PATH signal (matches derive_strength js-ts): a test dir OR a *.test.*/*.spec.* file -> real.
+          if ls -d test tests __tests__ >/dev/null 2>&1 \
+             || find . -path ./node_modules -prune -o \( -name '*.test.js' -o -name '*.test.ts' \
+                  -o -name '*.test.jsx' -o -name '*.test.tsx' -o -name '*.spec.js' -o -name '*.spec.ts' \) -print \
+                  2>/dev/null | grep -q .; then
+            echo "tests present -> running tests [strength=real]"
+            if [ -f package.json ] && node -e "process.exit(require('./package.json').scripts?.test?0:1)" 2>/dev/null; then
+              npm test
+            else
+              # No test script -> use the zero-dep built-in node test runner over the test dir(s).
+              echo "no package.json test script; using node --test"
+              node --test
+            fi
+          else
+            echo "::notice::no tests -> import/build smoke [strength=weak]"
+            if [ -f package.json ] && node -e "process.exit(require('./package.json').scripts?.build?0:1)" 2>/dev/null; then
+              npm run build
+            elif [ -f package.json ] && node -e "process.exit(require('./package.json').main?0:1)" 2>/dev/null; then
+              node -e "require('./' + require('./package.json').main); console.log('import OK')"
+            else
+              echo "no tests, no build, no main; ci is a green no-op [strength=weak]"
+            fi
+          fi

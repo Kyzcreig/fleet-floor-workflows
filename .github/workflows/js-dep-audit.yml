@@ -1,0 +1,58 @@
+# Reusable floor component: `dep_audit` (JS/TS) — npm/pnpm/yarn audit at high severity if a lockfile.
+# DETERMINISTIC: only audits an EXPLICIT lockfile; no lockfile -> present+green NOOP (recorded honestly,
+# spec D-9 — a noop can't make a repo auto-merge-eligible). Internal job name `dep_audit` = frozen.
+name: floor-js-dep-audit
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        type: string
+        default: "20"
+      working-directory:
+        type: string
+        default: "."
+      audit-level:
+        description: "npm audit severity gate."
+        type: string
+        default: "high"
+
+permissions:
+  contents: read
+
+jobs:
+  dep_audit:
+    name: dep_audit
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+
+      - name: Audit dependencies (explicit lockfile only)
+        env:
+          LEVEL: ${{ inputs.audit-level }}
+        run: |
+          set -euo pipefail
+          if [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
+            echo "npm lockfile present -> npm audit --audit-level=$LEVEL [strength=real]"
+            npm audit --audit-level="$LEVEL"
+          elif [ -f pnpm-lock.yaml ]; then
+            echo "pnpm lockfile present -> pnpm audit [strength=real]"
+            corepack enable
+            pnpm audit --audit-level "$LEVEL"
+          elif [ -f yarn.lock ]; then
+            echo "yarn lockfile present -> yarn npm audit [strength=real]"
+            corepack enable
+            yarn npm audit --severity "$LEVEL"
+          else
+            echo "::notice::no lockfile -> dep_audit is a green no-op [strength=noop]"
+            exit 0
+          fi

@@ -39,3 +39,28 @@ jobs:
     uses: ./.github/workflows/python-dep-audit.yml
     with:
       working-directory: sample
+
+  # --- JS/TS floor self-test (Phase 4b) over the clean js-sample/ package ---
+  # These caller jobs are js_-prefixed so their compound check names don't collide with the python
+  # selftest jobs above. A FLOORED js repo's caller (render_caller lang="js-ts") names its jobs `ci`/
+  # `type_check`/`dep_audit` -> emits `ci / ci` etc, the canonical names the registry credits.
+  js_ci:
+    uses: ./.github/workflows/js-ci.yml
+    with:
+      working-directory: js-sample
+
+  js_type_check:
+    uses: ./.github/workflows/js-typecheck.yml
+    with:
+      working-directory: js-sample
+
+  js_sast:
+    uses: ./.github/workflows/sast.yml
+    with:
+      target: js-sample
+      configs: "p/javascript p/typescript p/secrets"
+
+  js_dep_audit:
+    uses: ./.github/workflows/js-dep-audit.yml
+    with:
+      working-directory: js-sample
