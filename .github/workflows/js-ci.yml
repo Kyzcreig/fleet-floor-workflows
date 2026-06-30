@@ -69,11 +69,26 @@ jobs:
       - name: Run tests (path-signal) or smoke
         run: |
           set -euo pipefail
-          # PATH signal (matches derive_strength js-ts): a test dir OR a *.test.*/*.spec.* file -> real.
-          if ls -d test tests __tests__ >/dev/null 2>&1 \
-             || find . -path ./node_modules -prune -o \( -name '*.test.js' -o -name '*.test.ts' \
-                  -o -name '*.test.jsx' -o -name '*.test.tsx' -o -name '*.spec.js' -o -name '*.spec.ts' \) -print \
-                  2>/dev/null | grep -q .; then
+          # PATH signal (matches derive_strength js-ts): a conventional test dir OR a *.test.*/*.spec.*
+          # file outside vendored trees -> real. Detection MUST be deterministic and pipefail-safe:
+          # the old `find . | grep -q .` raced (grep -q closes the pipe on first match; find, still
+          # walking a NESTED node_modules the `-path ./node_modules` prune missed, took SIGPIPE -> 141
+          # -> pipefail flipped the condition FALSE -> wrong import-smoke branch on a repo WITH tests).
+          # Fixes: prune ALL node_modules/.git/dist/build; `-print -quit` so find exits 0 itself (no
+          # pipe, no SIGPIPE); capture to a var.
+          have_tests=0
+          for d in test tests __tests__ src/__tests__ spec; do
+            if [ -d "$d" ]; then have_tests=1; break; fi
+          done
+          if [ "$have_tests" = 0 ]; then
+            found=$(find . \( -path '*/node_modules' -o -path '*/.git' -o -path '*/dist' -o -path '*/build' -o -path '*/.next' \) -prune \
+                      -o \( -name '*.test.js' -o -name '*.test.ts' -o -name '*.test.jsx' -o -name '*.test.tsx' \
+                            -o -name '*.test.mjs' -o -name '*.test.cjs' \
+                            -o -name '*.spec.js' -o -name '*.spec.ts' -o -name '*.spec.jsx' -o -name '*.spec.tsx' \) \
+                      -print -quit 2>/dev/null || true)
+            [ -n "$found" ] && have_tests=1
+          fi
+          if [ "$have_tests" = 1 ]; then
             echo "tests present -> running tests [strength=real]"
             if [ -f package.json ] && node -e "process.exit(require('./package.json').scripts?.test?0:1)" 2>/dev/null; then
               npm test
@@ -87,7 +102,21 @@ jobs:
             if [ -f package.json ] && node -e "process.exit(require('./package.json').scripts?.build?0:1)" 2>/dev/null; then
               npm run build
             elif [ -f package.json ] && node -e "process.exit(require('./package.json').main?0:1)" 2>/dev/null; then
-              node -e "require('./' + require('./package.json').main); console.log('import OK')"
+              # Import smoke = "does main load without throwing?". A library imports and returns (rc 0);
+              # a SERVER entrypoint starts listening and never returns. Both = loaded OK. Bound it with a
+              # timeout so a long-running entrypoint can't hang CI for 6h: rc 0 (returned) or 124/143
+              # (still alive at the deadline = loaded into a long-running process) = pass; any OTHER
+              # non-zero = threw during require = real failure.
+              set +e
+              timeout --preserve-status 60 node -e "require('./' + require('./package.json').main); console.log('import OK')"
+              rc=$?
+              set -e
+              if [ "$rc" -eq 0 ] || [ "$rc" -eq 124 ] || [ "$rc" -eq 143 ]; then
+                echo "import smoke OK (rc=$rc; 124/143 = entrypoint started a long-running process and loaded cleanly)"
+              else
+                echo "::error::import smoke FAILED (rc=$rc) — main module threw on require"
+                exit 1
+              fi
             else
               echo "no tests, no build, no main; ci is a green no-op [strength=weak]"
             fi
