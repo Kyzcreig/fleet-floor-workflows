@@ -57,6 +57,18 @@ jobs:
             eval "$INSTALL_CMD"
           elif [ -f pyproject.toml ] || [ -f setup.py ] || [ -f setup.cfg ]; then
             pip install -e . || pip install . || echo "::warning::package not pip-installable; continuing for import/tests"
+            # A package can still declare its TEST deps only in a requirements file (not in
+            # the package metadata) — install the root requirements.txt too if present.
+            if [ -f requirements.txt ]; then
+              echo "also installing requirements.txt (test deps)"
+              pip install -r requirements.txt || echo "::warning::requirements.txt install had problems; continuing"
+            fi
+          elif [ -f requirements.txt ]; then
+            # No package metadata but a requirements.txt — the common "script repo + tests" shape.
+            # Without this the suite imports its deps (fastapi/hassil/etc.) and CI goes red for the
+            # wrong reason. (Fleet-floor v2 fix, 2026-06-30.)
+            echo "no package metadata; installing requirements.txt"
+            pip install -r requirements.txt || echo "::warning::requirements.txt install had problems; continuing"
           else
             echo "no python package metadata; nothing to install"
           fi
