@@ -31,6 +31,9 @@ jobs:
   ci:
     name: ci
     runs-on: ubuntu-latest
+    # A hung test (a server that never closes, a port wait with no timeout) must not burn the 6h
+    # default — fail the floor at 20 min so provisioning aborts cleanly instead of polling forever.
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: ${{ inputs.working-directory }}
