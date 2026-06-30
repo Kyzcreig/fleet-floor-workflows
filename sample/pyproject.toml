@@ -1,0 +1,16 @@
+[project]
+name = "sample-pkg"
+version = "0.0.1"
+description = "Clean sample package proving the fleet floor goes green."
+requires-python = ">=3.9"
+dependencies = []
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100

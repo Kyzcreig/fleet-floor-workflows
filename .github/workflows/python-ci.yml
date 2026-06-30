@@ -1,0 +1,77 @@
+# Reusable floor component: `ci` — pytest if a tests dir exists, else import-smoke.
+# Part of the fleet-floor (greploop posture-B). Called via `uses:` + an immutable SHA.
+# Emits a check-run whose internal job name is the literal floor component `ci`
+# (frozen contract — renaming this job is a breaking fleet-wide change; see spec D-12).
+name: floor-ci
+
+on:
+  workflow_call:
+    inputs:
+      python-version:
+        description: "Python version for the runner."
+        type: string
+        default: "3.11"
+      working-directory:
+        description: "Dir containing the package (pyproject.toml / setup.py)."
+        type: string
+        default: "."
+      tests-path:
+        description: "Tests directory (relative to working-directory)."
+        type: string
+        default: "tests"
+      import-name:
+        description: "Module to import-smoke when there are no tests (e.g. 'mypkg')."
+        type: string
+        default: ""
+      install:
+        description: "Install command; default installs the package editable if installable."
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    name: ci
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          if [ -n "${{ inputs.install }}" ]; then
+            ${{ inputs.install }}
+          elif [ -f pyproject.toml ] || [ -f setup.py ] || [ -f setup.cfg ]; then
+            pip install -e . || pip install . || echo "::warning::package not pip-installable; continuing for import/tests"
+          else
+            echo "no python package metadata; nothing to install"
+          fi
+          pip install pytest
+
+      - name: Run tests (pytest) or import-smoke
+        run: |
+          set -euo pipefail
+          TESTS="${{ inputs.tests-path }}"
+          if [ -d "$TESTS" ] && find "$TESTS" -name 'test_*.py' -o -name '*_test.py' | grep -q .; then
+            echo "tests present -> pytest ($TESTS) [strength=real]"
+            python -m pytest "$TESTS" -q
+          else
+            IMPORT="${{ inputs.import-name }}"
+            if [ -z "$IMPORT" ]; then
+              echo "::notice::no tests and no import-name given; ci is a green no-op [strength=weak]"
+              exit 0
+            fi
+            echo "no tests -> import-smoke: import $IMPORT [strength=weak]"
+            python -c "import importlib, sys; importlib.import_module('$IMPORT'); print('import OK:', '$IMPORT')"
+          fi

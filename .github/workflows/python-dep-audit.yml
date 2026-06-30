@@ -1,0 +1,60 @@
+# Reusable floor component: `dep_audit` — pip-audit on a lockfile/requirements if present.
+# DETERMINISTIC by design: we only audit an EXPLICIT dependency manifest (lockfile / requirements).
+# A pyproject with deps but no lockfile -> present+green NOOP (we can't pin a precise dep set to
+# audit, and auditing the whole runner env flags toolchain packages = fail-for-the-wrong-reason).
+# NOOP strength is recorded honestly (spec D-9); a noop component can NOT make a repo
+# auto-merge-eligible (decision-path noop gate, D-2). Internal job name `dep_audit` = frozen contract.
+name: floor-dep-audit
+
+on:
+  workflow_call:
+    inputs:
+      python-version:
+        type: string
+        default: "3.11"
+      working-directory:
+        type: string
+        default: "."
+
+permissions:
+  contents: read
+
+jobs:
+  dep_audit:
+    name: dep_audit
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - name: Install pip-audit
+        run: |
+          python -m pip install --upgrade pip
+          pip install pip-audit
+
+      - name: Audit dependencies (explicit manifest only)
+        run: |
+          set -euo pipefail
+          if [ -f uv.lock ]; then
+            echo "uv.lock present -> pip-audit on exported requirements [strength=real]"
+            pip install uv
+            uv export --format requirements-txt --no-hashes -o /tmp/req.txt
+            pip-audit -r /tmp/req.txt
+          elif ls requirements*.txt >/dev/null 2>&1; then
+            echo "requirements*.txt present -> pip-audit [strength=real]"
+            for r in requirements*.txt; do echo "auditing $r"; pip-audit -r "$r"; done
+          elif [ -f poetry.lock ]; then
+            echo "poetry.lock present -> pip-audit [strength=real]"
+            pip-audit
+          else
+            echo "::notice::no explicit dependency manifest (lockfile/requirements) -> dep_audit is a green no-op [strength=noop]"
+            exit 0
+          fi

@@ -1,0 +1,3 @@
+# Every change to the floor logic is human-reviewed (spec §7 central-repo hardening).
+# The whole repo is a sensitive path: it defines the gate for every floored repo.
+* @Kyzcreig

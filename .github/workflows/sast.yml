@@ -1,0 +1,47 @@
+# Reusable floor component: `sast` — semgrep at ERROR severity (proven 0-noise on clean Python).
+# Language-agnostic (configs are semgrep registry packs). Internal job name `sast` = frozen contract.
+name: floor-sast
+
+on:
+  workflow_call:
+    inputs:
+      target:
+        description: "Path semgrep scans."
+        type: string
+        default: "."
+      configs:
+        description: "Space-separated semgrep --config values."
+        type: string
+        default: "p/python p/secrets"
+      semgrep-version:
+        type: string
+        default: "1.46.0"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: floor-sast-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sast:
+    name: sast
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install semgrep
+        run: pip install "semgrep==${{ inputs.semgrep-version }}"
+
+      - name: Run semgrep (ERROR severity gate)
+        run: |
+          set -euo pipefail
+          read -r -a CONFIG_ARGS <<< "$(for c in ${{ inputs.configs }}; do printf -- '--config=%s ' "$c"; done)"
+          semgrep "${CONFIG_ARGS[@]}" --severity=ERROR --error --quiet "${{ inputs.target }}"

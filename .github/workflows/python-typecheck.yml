@@ -1,0 +1,55 @@
+# Reusable floor component: `type_check` — ruff (lint) + optional ty/mypy if configured.
+# ERROR-gated. Internal job name `type_check` is a frozen contract (spec D-12).
+name: floor-typecheck
+
+on:
+  workflow_call:
+    inputs:
+      python-version:
+        type: string
+        default: "3.11"
+      working-directory:
+        type: string
+        default: "."
+      target:
+        description: "Path ruff checks (relative to working-directory)."
+        type: string
+        default: "."
+
+permissions:
+  contents: read
+
+jobs:
+  type_check:
+    name: type_check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - name: Install ruff (+ ty if a type config exists)
+        run: |
+          python -m pip install --upgrade pip
+          pip install "ruff==0.6.9"
+
+      - name: ruff check (ERROR gate)
+        run: ruff check "${{ inputs.target }}"
+
+      - name: ty / mypy (only if configured)
+        run: |
+          set -euo pipefail
+          if grep -qE '^\[tool\.(mypy|ty)\]' pyproject.toml 2>/dev/null || [ -f mypy.ini ] || [ -f .mypy.ini ]; then
+            echo "type config present -> running mypy [strength=real]"
+            pip install mypy
+            mypy "${{ inputs.target }}" || { echo "::error::mypy found type errors"; exit 1; }
+          else
+            echo "::notice::no mypy/ty config; ruff-only type_check [strength=weak]"
+          fi

@@ -1,0 +1,43 @@
+# Fleet floor — thin caller. Stamped into a floored repo by `provision_floor.py`.
+# Each `uses:` is pinned to an IMMUTABLE COMMIT SHA of Kyzcreig/fleet-floor-workflows
+# (NOT a moving tag — spec B-O2-2). A floor tighten = a reviewed SHA-bump PR here.
+#
+# Placeholders the provisioner fills:
+#   __FLOOR_SHA__      40-char commit SHA of the central repo to pin
+#   __IMPORT_NAME__    top-level module for import-smoke when there are no tests
+#   __WORKDIR__        package dir (default ".")
+#   __SAST_TARGET__    path semgrep scans (default the package dir)
+name: fleet-floor
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: Kyzcreig/fleet-floor-workflows/.github/workflows/python-ci.yml@__FLOOR_SHA__
+    with:
+      working-directory: __WORKDIR__
+      import-name: __IMPORT_NAME__
+
+  type_check:
+    uses: Kyzcreig/fleet-floor-workflows/.github/workflows/python-typecheck.yml@__FLOOR_SHA__
+    with:
+      working-directory: __WORKDIR__
+
+  sast:
+    uses: Kyzcreig/fleet-floor-workflows/.github/workflows/sast.yml@__FLOOR_SHA__
+    with:
+      target: __SAST_TARGET__
+
+  secret_scan:
+    uses: Kyzcreig/fleet-floor-workflows/.github/workflows/secret-scan.yml@__FLOOR_SHA__
+
+  dep_audit:
+    uses: Kyzcreig/fleet-floor-workflows/.github/workflows/python-dep-audit.yml@__FLOOR_SHA__
+    with:
+      working-directory: __WORKDIR__

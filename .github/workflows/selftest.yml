@@ -1,0 +1,41 @@
+# Self-test: exercises all 5 reusable floor workflows against the in-repo clean `sample/` package
+# on every push/PR. This is the AC1 proof — the reusable workflows must go GREEN on real CI, and the
+# compound check-run names this emits (`<caller-job> / <reusable-job>`) are what a floored repo's
+# branch-protection + FLOOR_MAP must use (spec B-O2-3 / D-12). DO NOT delete: it's the floor's own floor.
+name: floor-selftest
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: ./.github/workflows/python-ci.yml
+    with:
+      working-directory: sample
+      tests-path: tests
+      import-name: sample_pkg
+
+  type_check:
+    uses: ./.github/workflows/python-typecheck.yml
+    with:
+      working-directory: sample
+      target: src
+
+  sast:
+    uses: ./.github/workflows/sast.yml
+    with:
+      target: sample
+
+  secret_scan:
+    uses: ./.github/workflows/secret-scan.yml
+
+  dep_audit:
+    uses: ./.github/workflows/python-dep-audit.yml
+    with:
+      working-directory: sample
