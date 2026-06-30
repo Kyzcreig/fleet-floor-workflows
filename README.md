@@ -46,3 +46,5 @@ This repo is public (cross-owner `uses:` requires it) and defines every floor, s
 fleet's highest-value target: it is branch-protected, restricted-push, no-tag-moves, and its own
 changes are human-reviewed and never auto-merged. A malicious commit here changes nothing until a
 reviewed SHA-bump caller PR lands in a target repo.
+
+# floor v1: provisioning + Phase-2 live-proven 2026-06-30
