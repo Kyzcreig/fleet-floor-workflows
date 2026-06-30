@@ -21,7 +21,10 @@ permissions:
   contents: read
 
 concurrency:
-  group: floor-sast-${{ github.workflow }}-${{ github.ref }}
+  # Include the calling JOB id so a single workflow that calls this reusable workflow MORE THAN ONCE
+  # (e.g. the selftest's python `sast` + `js_sast`) doesn't put both invocations in one group and
+  # cancel-in-progress one of them. Two distinct callers -> two distinct groups.
+  group: floor-sast-${{ github.workflow }}-${{ github.job }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
