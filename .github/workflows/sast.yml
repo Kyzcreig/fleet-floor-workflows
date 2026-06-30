@@ -13,6 +13,10 @@ on:
         description: "Space-separated semgrep --config values."
         type: string
         default: "p/python p/secrets"
+      concurrency-suffix:
+        description: "Disambiguator when one workflow calls this reusable workflow more than once."
+        type: string
+        default: ""
       semgrep-version:
         type: string
         default: "1.46.0"
@@ -21,10 +25,10 @@ permissions:
   contents: read
 
 concurrency:
-  # Include the calling JOB id so a single workflow that calls this reusable workflow MORE THAN ONCE
-  # (e.g. the selftest's python `sast` + `js_sast`) doesn't put both invocations in one group and
-  # cancel-in-progress one of them. Two distinct callers -> two distinct groups.
-  group: floor-sast-${{ github.workflow }}-${{ github.job }}-${{ github.ref }}
+  # A reusable workflow's `github.job` is its OWN job id (always `sast`), so two callers in one run
+  # still collide. The CALLER passes a unique `concurrency-suffix` (e.g. the caller job name) to keep
+  # the groups distinct; default empty preserves single-caller behavior.
+  group: floor-sast-${{ github.workflow }}-${{ inputs.concurrency-suffix }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
