@@ -1,0 +1,57 @@
+# Reusable floor component: `type_check` (JS/TS) — tsc --noEmit if a tsconfig exists, else eslint/weak.
+# ERROR-gated. Internal job name `type_check` is a frozen contract (spec D-12).
+#
+# real-vs-weak is path-derivable (matches derive_strength js-ts): a tsconfig.json present -> tsc
+# --noEmit runs = real; otherwise eslint if configured (weak) or a green no-op.
+name: floor-js-typecheck
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        type: string
+        default: "20"
+      working-directory:
+        type: string
+        default: "."
+
+permissions:
+  contents: read
+
+jobs:
+  type_check:
+    name: type_check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+
+      - name: Install deps (best-effort, for local tsconfig extends / types)
+        run: |
+          set -euo pipefail
+          if [ -f package-lock.json ]; then npm ci || npm install || true
+          elif [ -f pnpm-lock.yaml ]; then corepack enable && pnpm install || true
+          elif [ -f yarn.lock ]; then corepack enable && yarn install || true
+          elif [ -f package.json ]; then npm install || true
+          fi
+
+      - name: Type check (tsc --noEmit if tsconfig, else eslint/weak)
+        run: |
+          set -euo pipefail
+          if [ -f tsconfig.json ]; then
+            echo "tsconfig.json present -> tsc --noEmit [strength=real]"
+            npx --yes -p typescript@5 tsc --noEmit
+          elif [ -f .eslintrc ] || [ -f .eslintrc.json ] || [ -f .eslintrc.js ] || [ -f eslint.config.js ]; then
+            echo "eslint configured -> eslint [strength=weak]"
+            npx --yes eslint . || { echo "::error::eslint found problems"; exit 1; }
+          else
+            echo "::notice::no tsconfig/eslint -> type_check is a green no-op [strength=weak]"
+          fi
