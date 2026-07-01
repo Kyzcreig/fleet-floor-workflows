@@ -35,6 +35,8 @@ jobs:
 
   secret_scan:
     uses: ./.github/workflows/secret-scan.yml
+    with:
+      concurrency-suffix: py
 
   dep_audit:
     uses: ./.github/workflows/python-dep-audit.yml
@@ -95,6 +97,8 @@ jobs:
 
   generic_secret_scan:
     uses: ./.github/workflows/secret-scan.yml
+    with:
+      concurrency-suffix: generic
 
   # --- RECURRING NEGATIVE selftest (AC-A7 / pass-3 blocker 2): the tripwires must have TEETH ---
   # A green-on-clean selftest proves the floor RUNS, not that it still CATCHES. This job runs the SAME
