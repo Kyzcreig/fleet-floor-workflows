@@ -1,0 +1,24 @@
+# Reusable floor component: `ci` (GENERIC — shell/Makefile/HTML/docs). Honest NOOP: a generic repo has
+# no language test runner, so this emits `ci / ci` = success as a strength=noop placeholder. The real
+# tripwires on a generic floor are sast + secret_scan (language-agnostic); ci/type_check/dep_audit are
+# deliberate noops -> noop>=2 -> the ARM gate can never clear a generic floor (spec I-A2, floored != armed).
+# Internal job name `ci` is a frozen contract (spec D-12) so the compound check-run name matches python/js.
+name: floor-generic-ci
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        type: string
+        default: "."
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    name: ci
+    runs-on: ubuntu-latest
+    steps:
+      - name: generic ci is a no-op (strength=noop)
+        run: echo "::notice::generic floor — ci is a no-op placeholder (no language toolchain); real gates are sast + secret_scan [strength=noop]"

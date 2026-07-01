@@ -66,3 +66,83 @@ jobs:
     uses: ./.github/workflows/js-dep-audit.yml
     with:
       working-directory: js-sample
+
+  # --- GENERIC floor self-test (Track A) over the clean generic-sample/ (shell+Makefile+HTML) ---
+  # generic_-prefixed so compound names don't collide; a floored generic repo's caller names its jobs
+  # ci/type_check/dep_audit -> emits `ci / ci` etc (the canonical names the registry credits). ci/
+  # type_check/dep_audit are honest noops; sast/secret_scan are the real language-agnostic tripwires.
+  generic_ci:
+    uses: ./.github/workflows/generic-ci.yml
+    with:
+      working-directory: generic-sample
+
+  generic_type_check:
+    uses: ./.github/workflows/generic-typecheck.yml
+    with:
+      working-directory: generic-sample
+
+  generic_dep_audit:
+    uses: ./.github/workflows/generic-dep-audit.yml
+    with:
+      working-directory: generic-sample
+
+  generic_sast:
+    uses: ./.github/workflows/sast.yml
+    with:
+      target: generic-sample
+      configs: "p/secrets"
+      concurrency-suffix: generic
+
+  generic_secret_scan:
+    uses: ./.github/workflows/secret-scan.yml
+
+  # --- RECURRING NEGATIVE selftest (AC-A7 / pass-3 blocker 2): the tripwires must have TEETH ---
+  # A green-on-clean selftest proves the floor RUNS, not that it still CATCHES. This job runs the SAME
+  # scanners (pinned versions) over generic-sample-redteam/ (a committed always-present bad fixture with
+  # a format-valid, NON-LIVE test key) and asserts they go RED. If a semgrep/gitleaks drift or a botched
+  # edit silently stops the tripwire firing, THIS job goes red -> a coverage regression surfaces as CI
+  # red, not a silent hollowing (the exact hollow-check pathology, caught in our own sample).
+  generic_negative_teeth:
+    name: generic_negative_teeth
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      # Pin MUST match render_caller/sast.yml's measured semgrep-version (D-A6, 2026-06-30 measurement).
+      - name: Assert pinned semgrep version == measured 1.46.0
+        run: |
+          grep -q 'default: "1.46.0"' .github/workflows/sast.yml
+
+      - name: Install pinned scanners
+        run: |
+          set -euo pipefail
+          pip install "semgrep==1.46.0"
+          VER="8.18.4"
+          curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v${VER}/gitleaks_${VER}_linux_x64.tar.gz" -o gl.tgz
+          tar xzf gl.tgz gitleaks
+          sudo mv gitleaks /usr/local/bin/
+
+      - name: sast MUST go RED on the redteam fixture (semgrep p/secrets)
+        run: |
+          set -euo pipefail
+          n=$(semgrep --config=p/secrets --json --quiet generic-sample-redteam 2>/dev/null | python3 -c "import json,sys;print(len(json.load(sys.stdin).get('results',[])))")
+          echo "semgrep findings on redteam fixture: $n"
+          if [ "$n" -lt 1 ]; then echo "::error::sast tripwire is HOLLOW — semgrep found 0 on the planted key"; exit 1; fi
+
+      - name: secret_scan MUST go RED on the redteam fixture (gitleaks)
+        run: |
+          set -euo pipefail
+          if gitleaks detect --source generic-sample-redteam --no-git --no-banner --redact --exit-code 1; then
+            echo "::error::secret_scan tripwire is HOLLOW — gitleaks found 0 on the planted key"; exit 1
+          fi
+          echo "gitleaks correctly flagged the planted key (RED)"
+
+      - name: negative teeth OK
+        run: echo "::notice::generic floor tripwires still have teeth (sast + secret_scan both RED on the planted key)"
+

@@ -1,0 +1,22 @@
+# Reusable floor component: `dep_audit` (GENERIC — shell/Makefile/HTML/docs). Honest NOOP: no language
+# dependency manifest to audit on a generic repo. Emits `dep_audit / dep_audit` = success as strength=noop.
+# Internal job name `dep_audit` is a frozen contract (spec D-12).
+name: floor-generic-dep-audit
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        type: string
+        default: "."
+
+permissions:
+  contents: read
+
+jobs:
+  dep_audit:
+    name: dep_audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: generic dep_audit is a no-op (strength=noop)
+        run: echo "::notice::generic floor — dep_audit is a no-op placeholder (no language dependency manifest) [strength=noop]"
