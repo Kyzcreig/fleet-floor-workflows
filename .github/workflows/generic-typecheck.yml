@@ -1,0 +1,22 @@
+# Reusable floor component: `type_check` (GENERIC — shell/Makefile/HTML/docs). Honest NOOP: no language
+# type checker on a generic repo. Emits `type_check / type_check` = success as strength=noop.
+# Internal job name `type_check` is a frozen contract (spec D-12).
+name: floor-generic-typecheck
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        type: string
+        default: "."
+
+permissions:
+  contents: read
+
+jobs:
+  type_check:
+    name: type_check
+    runs-on: ubuntu-latest
+    steps:
+      - name: generic type_check is a no-op (strength=noop)
+        run: echo "::notice::generic floor — type_check is a no-op placeholder (no language type checker) [strength=noop]"

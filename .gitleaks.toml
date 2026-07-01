@@ -1,0 +1,16 @@
+# fleet-floor-workflows repo gitleaks allowlist.
+# The floor's own `secret_scan` (diff-scoped, honors this file) scans changed files on every PR. The
+# generic-sample-redteam/ directory INTENTIONALLY commits a format-valid NON-LIVE test key so the
+# recurring negative-teeth selftest can prove the tripwires still fire (AC-A7). Allowlist ONLY that
+# fixture path here so the repo's own floor doesn't choke on the deliberate fixture — real secrets
+# anywhere else are still caught (useDefault keeps the full ruleset on).
+title = "fleet-floor-workflows"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Intentional redteam test fixtures (non-live keys) used to prove the floor's tripwires have teeth."
+paths = [
+  '''generic-sample-redteam/.*''',
+]
