@@ -35,20 +35,30 @@ jobs:
   sast:
     name: sast
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.11"
+          cache: pip
+          cache-dependency-path: .github/workflows/*.yml
 
       - name: Install semgrep
-        run: pip install "semgrep==${{ inputs.semgrep-version }}"
+        env:
+          SEMGREP_VERSION: ${{ inputs.semgrep-version }}
+        run: pip install "semgrep==$SEMGREP_VERSION"
 
       - name: Run semgrep (ERROR severity gate)
+        env:
+          SEMGREP_CONFIGS: ${{ inputs.configs }}
+          SEMGREP_TARGET: ${{ inputs.target }}
         run: |
           set -euo pipefail
-          read -r -a CONFIG_ARGS <<< "$(for c in ${{ inputs.configs }}; do printf -- '--config=%s ' "$c"; done)"
-          semgrep "${CONFIG_ARGS[@]}" --severity=ERROR --error --quiet "${{ inputs.target }}"
+          CONFIG_ARGS=()
+          read -r -a CONFIG_VALUES <<< "$SEMGREP_CONFIGS"
+          for c in "${CONFIG_VALUES[@]}"; do CONFIG_ARGS+=("--config=$c"); done
+          semgrep "${CONFIG_ARGS[@]}" --severity=ERROR --error --quiet "$SEMGREP_TARGET"

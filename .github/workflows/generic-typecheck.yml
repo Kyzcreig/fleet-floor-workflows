@@ -9,14 +9,23 @@ on:
       working-directory:
         type: string
         default: "."
+      concurrency-suffix:
+        description: "Disambiguator when one workflow calls this reusable workflow more than once."
+        type: string
+        default: ""
 
 permissions:
   contents: read
+
+concurrency:
+  group: floor-type-check-${{ github.workflow }}-${{ inputs.concurrency-suffix }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   type_check:
     name: type_check
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: generic type_check is a no-op (strength=noop)
         run: echo "::notice::generic floor — type_check is a no-op placeholder (no language type checker) [strength=noop]"

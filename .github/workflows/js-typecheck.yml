@@ -14,25 +14,40 @@ on:
       working-directory:
         type: string
         default: "."
+      concurrency-suffix:
+        description: "Disambiguator when one workflow calls this reusable workflow more than once."
+        type: string
+        default: ""
 
 permissions:
   contents: read
+
+concurrency:
+  group: floor-type-check-${{ github.workflow }}-${{ inputs.concurrency-suffix }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   type_check:
     name: type_check
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: ${{ inputs.working-directory }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: ${{ inputs.node-version }}
+          cache: npm
+          cache-dependency-path: |
+            ${{ inputs.working-directory }}/package-lock.json
+            ${{ inputs.working-directory }}/npm-shrinkwrap.json
+            ${{ inputs.working-directory }}/package.json
+            .github/workflows/*.yml
 
       - name: Install deps (best-effort, for local tsconfig extends / types)
         run: |
@@ -48,7 +63,7 @@ jobs:
           set -euo pipefail
           if [ -f tsconfig.json ]; then
             echo "tsconfig.json present -> tsc --noEmit [strength=real]"
-            npx --yes -p typescript@5 tsc --noEmit
+            npx --yes -p typescript@5.9.3 tsc --noEmit
           elif [ -f .eslintrc ] || [ -f .eslintrc.json ] || [ -f .eslintrc.js ] || [ -f eslint.config.js ]; then
             echo "eslint configured -> eslint [strength=weak]"
             npx --yes eslint . || { echo "::error::eslint found problems"; exit 1; }

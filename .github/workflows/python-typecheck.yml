@@ -15,25 +15,41 @@ on:
         description: "Path ruff checks (relative to working-directory)."
         type: string
         default: "."
+      concurrency-suffix:
+        description: "Disambiguator when one workflow calls this reusable workflow more than once."
+        type: string
+        default: ""
 
 permissions:
   contents: read
+
+concurrency:
+  group: floor-type-check-${{ github.workflow }}-${{ inputs.concurrency-suffix }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   type_check:
     name: type_check
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: ${{ inputs.working-directory }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: ${{ inputs.python-version }}
+          cache: pip
+          cache-dependency-path: |
+            ${{ inputs.working-directory }}/requirements*.txt
+            ${{ inputs.working-directory }}/pyproject.toml
+            ${{ inputs.working-directory }}/setup.cfg
+            ${{ inputs.working-directory }}/setup.py
+            .github/workflows/*.yml
 
       - name: Install ruff (+ ty if a type config exists)
         run: |
@@ -41,15 +57,19 @@ jobs:
           pip install "ruff==0.6.9"
 
       - name: ruff check (ERROR gate)
-        run: ruff check "${{ inputs.target }}"
+        env:
+          TYPECHECK_TARGET: ${{ inputs.target }}
+        run: ruff check "$TYPECHECK_TARGET"
 
       - name: ty / mypy (only if configured)
+        env:
+          TYPECHECK_TARGET: ${{ inputs.target }}
         run: |
           set -euo pipefail
           if grep -qE '^\[tool\.(mypy|ty)\]' pyproject.toml 2>/dev/null || [ -f mypy.ini ] || [ -f .mypy.ini ]; then
             echo "type config present -> running mypy [strength=real]"
             pip install mypy
-            mypy "${{ inputs.target }}" || { echo "::error::mypy found type errors"; exit 1; }
+            mypy "$TYPECHECK_TARGET" || { echo "::error::mypy found type errors"; exit 1; }
           else
             echo "::notice::no mypy/ty config; ruff-only type_check [strength=weak]"
           fi
