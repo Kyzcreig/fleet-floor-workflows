@@ -20,12 +20,14 @@ jobs:
       working-directory: sample
       tests-path: tests
       import-name: sample_pkg
+      concurrency-suffix: py
 
   type_check:
     uses: ./.github/workflows/python-typecheck.yml
     with:
       working-directory: sample
       target: src
+      concurrency-suffix: py
 
   sast:
     uses: ./.github/workflows/sast.yml
@@ -42,6 +44,7 @@ jobs:
     uses: ./.github/workflows/python-dep-audit.yml
     with:
       working-directory: sample
+      concurrency-suffix: py
 
   # --- JS/TS floor self-test (Phase 4b) over the clean js-sample/ package ---
   # These caller jobs are js_-prefixed so their compound check names don't collide with the python
@@ -51,11 +54,13 @@ jobs:
     uses: ./.github/workflows/js-ci.yml
     with:
       working-directory: js-sample
+      concurrency-suffix: js
 
   js_type_check:
     uses: ./.github/workflows/js-typecheck.yml
     with:
       working-directory: js-sample
+      concurrency-suffix: js
 
   js_sast:
     uses: ./.github/workflows/sast.yml
@@ -68,6 +73,7 @@ jobs:
     uses: ./.github/workflows/js-dep-audit.yml
     with:
       working-directory: js-sample
+      concurrency-suffix: js
 
   # --- GENERIC floor self-test (Track A) over the clean generic-sample/ (shell+Makefile+HTML) ---
   # generic_-prefixed so compound names don't collide; a floored generic repo's caller names its jobs
@@ -77,16 +83,19 @@ jobs:
     uses: ./.github/workflows/generic-ci.yml
     with:
       working-directory: generic-sample
+      concurrency-suffix: generic
 
   generic_type_check:
     uses: ./.github/workflows/generic-typecheck.yml
     with:
       working-directory: generic-sample
+      concurrency-suffix: generic
 
   generic_dep_audit:
     uses: ./.github/workflows/generic-dep-audit.yml
     with:
       working-directory: generic-sample
+      concurrency-suffix: generic
 
   generic_sast:
     uses: ./.github/workflows/sast.yml
@@ -109,14 +118,17 @@ jobs:
   generic_negative_teeth:
     name: generic_negative_teeth
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.11"
+          cache: pip
+          cache-dependency-path: .github/workflows/*.yml
 
       # Pin MUST match render_caller/sast.yml's measured semgrep-version (D-A6, 2026-06-30 measurement).
       - name: Assert pinned semgrep version == measured 1.46.0

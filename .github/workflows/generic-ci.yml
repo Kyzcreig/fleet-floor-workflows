@@ -11,14 +11,23 @@ on:
       working-directory:
         type: string
         default: "."
+      concurrency-suffix:
+        description: "Disambiguator when one workflow calls this reusable workflow more than once."
+        type: string
+        default: ""
 
 permissions:
   contents: read
+
+concurrency:
+  group: floor-ci-${{ github.workflow }}-${{ inputs.concurrency-suffix }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   ci:
     name: ci
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: generic ci is a no-op (strength=noop)
         run: echo "::notice::generic floor — ci is a no-op placeholder (no language toolchain); real gates are sast + secret_scan [strength=noop]"

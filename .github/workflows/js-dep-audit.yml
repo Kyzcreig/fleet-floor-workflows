@@ -16,25 +16,40 @@ on:
         description: "npm audit severity gate."
         type: string
         default: "high"
+      concurrency-suffix:
+        description: "Disambiguator when one workflow calls this reusable workflow more than once."
+        type: string
+        default: ""
 
 permissions:
   contents: read
+
+concurrency:
+  group: floor-dep-audit-${{ github.workflow }}-${{ inputs.concurrency-suffix }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   dep_audit:
     name: dep_audit
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: ${{ inputs.working-directory }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: ${{ inputs.node-version }}
+          cache: npm
+          cache-dependency-path: |
+            ${{ inputs.working-directory }}/package-lock.json
+            ${{ inputs.working-directory }}/npm-shrinkwrap.json
+            ${{ inputs.working-directory }}/package.json
+            .github/workflows/*.yml
 
       - name: Audit dependencies (explicit lockfile only)
         env:
