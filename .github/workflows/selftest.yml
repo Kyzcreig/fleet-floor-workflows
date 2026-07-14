@@ -162,3 +162,51 @@ jobs:
       - name: negative teeth OK
         run: echo "::notice::generic floor tripwires still have teeth (sast + secret_scan both RED on the planted key)"
 
+
+  # --- slop-detect floor self-test (Phase: advisory frontend gate, 2026-07-13) ---
+  # Advisory call over the PLANTED slop fixture: must SUCCEED (advisory) while reporting findings.
+  slop:
+    uses: ./.github/workflows/slop-detect.yml
+    with:
+      paths: html-sample/slop.html
+      concurrency-suffix: slop
+
+  # Advisory call over the clean fixture: must succeed with findings=0.
+  slop_clean:
+    uses: ./.github/workflows/slop-detect.yml
+    with:
+      paths: html-sample/clean.html
+      concurrency-suffix: clean
+
+  # Teeth: the detector itself must go RED (exit 2, >=10 findings) on the planted fixture,
+  # and the two advisory calls must have reported the right counts. Hollow-tripwire guard.
+  slop_teeth:
+    needs: [slop, slop_clean]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+      - name: counts from the reusable-workflow calls must match ground truth
+        env:
+          SLOP_FINDINGS: ${{ needs.slop.outputs.findings }}
+          CLEAN_FINDINGS: ${{ needs.slop_clean.outputs.findings }}
+        run: |
+          set -euo pipefail
+          echo "advisory run reported: slop=$SLOP_FINDINGS clean=$CLEAN_FINDINGS"
+          if [ "${SLOP_FINDINGS:-0}" -lt 10 ]; then echo "::error::slop-detect tripwire is HOLLOW — <10 findings on planted slop"; exit 1; fi
+          if [ "${CLEAN_FINDINGS:-1}" -ne 0 ]; then echo "::error::slop-detect false-positives on the clean fixture"; exit 1; fi
+      - name: blocking mode MUST exit nonzero on planted slop (direct)
+        run: |
+          set -euo pipefail
+          git clone --quiet https://github.com/pbakaus/impeccable /tmp/imp
+          git -C /tmp/imp checkout --quiet f2049c2b76383b444bf30cd6184f7d49a6c580d1
+          (cd /tmp/imp && npm install --omit=dev --omit=optional --ignore-scripts --no-audit --no-fund)
+          set +e
+          node /tmp/imp/cli/bin/cli.js detect html-sample/slop.html --json > /dev/null
+          rc=$?
+          set -e
+          if [ "$rc" -ne 2 ]; then echo "::error::expected exit 2 on planted slop, got $rc"; exit 1; fi
+          echo "::notice::slop-detect teeth intact (exit 2 on planted fixture)"

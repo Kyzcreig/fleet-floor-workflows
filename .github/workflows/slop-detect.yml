@@ -1,0 +1,112 @@
+# Reusable floor component: `slop-detect` (ADVISORY — frontend design anti-patterns).
+# Runs the impeccable detector (pbakaus/impeccable, Apache-2.0) — 46 deterministic rules, no LLM,
+# no network — against HTML/JSX/CSS in the caller repo. ADVISORY by default: findings are surfaced
+# as warning annotations + a step-summary table, job still succeeds. Flip `blocking: true` to gate
+# (per Ace's prod-safety doctrine the OFF path is the default input, not an env hack).
+# Internal job name `slop_detect` is a frozen contract (compound check-run: `<caller-job> / slop_detect`).
+# Detector exit codes: 0 clean · 2 findings · 1 crash (crash FAILS the job even in advisory mode —
+# a broken detector must be loud, not silently green; the hermaguard silent-zero lesson).
+name: floor-slop-detect
+
+on:
+  workflow_call:
+    inputs:
+      paths:
+        description: "Space-separated files/dirs to scan (relative to repo root)."
+        type: string
+        default: "."
+      blocking:
+        description: "If true, findings (exit 2) fail the job. Default advisory."
+        type: boolean
+        default: false
+      impeccable-sha:
+        description: "Pinned pbakaus/impeccable commit to run."
+        type: string
+        default: "f2049c2b76383b444bf30cd6184f7d49a6c580d1"
+      concurrency-suffix:
+        type: string
+        default: ""
+
+    outputs:
+      findings:
+        description: "Number of anti-pattern findings (0 when clean)."
+        value: ${{ jobs.slop_detect.outputs.findings }}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: floor-slop-${{ github.workflow }}-${{ inputs.concurrency-suffix }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  slop_detect:
+    name: slop_detect
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      findings: ${{ steps.detect.outputs.findings }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+      - name: Install impeccable (pinned SHA, scripts disabled, puppeteer-free)
+        env:
+          IMP_SHA: ${{ inputs.impeccable-sha }}
+        run: |
+          git clone --quiet https://github.com/pbakaus/impeccable /tmp/impeccable
+          git -C /tmp/impeccable checkout --quiet "$IMP_SHA"
+          cd /tmp/impeccable
+          npm install --omit=dev --omit=optional --ignore-scripts --no-audit --no-fund
+      - name: Run detector
+        id: detect
+        env:
+          SCAN_PATHS: ${{ inputs.paths }}
+          BLOCKING: ${{ inputs.blocking }}
+        run: |
+          read -r -a PATHS_ARR <<< "$SCAN_PATHS"
+          set +e
+          node /tmp/impeccable/cli/bin/cli.js detect "${PATHS_ARR[@]}" --json > /tmp/findings.json
+          rc=$?
+          set -e
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+          if [ "$rc" -eq 0 ]; then
+            echo "findings=0" >> "$GITHUB_OUTPUT"
+            echo "### 🧹 Slop detector: clean (0 findings)" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          elif [ "$rc" -eq 2 ]; then
+            count=$(node -e "console.log(JSON.parse(require('fs').readFileSync('/tmp/findings.json','utf8')).length)")
+            echo "findings=$count" >> "$GITHUB_OUTPUT"
+            {
+              echo "### ⚠️ Slop detector: ${count} finding(s)"
+              echo ""
+              echo "| Rule | File | Line | Snippet |"
+              echo "|---|---|---|---|"
+              node -e "
+                const f = JSON.parse(require('fs').readFileSync('/tmp/findings.json','utf8'));
+                for (const x of f.slice(0, 50)) {
+                  const snip = String(x.snippet||'').replace(/\|/g,'\\\\|').slice(0,80);
+                  console.log('| ' + x.antipattern + ' | ' + x.file + ' | ' + x.line + ' | ' + snip + ' |');
+                }"
+            } >> "$GITHUB_STEP_SUMMARY"
+            node -e "
+              const f = JSON.parse(require('fs').readFileSync('/tmp/findings.json','utf8'));
+              for (const x of f.slice(0, 50))
+                console.log('::warning file=' + x.file + ',line=' + Math.max(1, x.line||1) + '::[' + x.antipattern + '] ' + (x.name||''));"
+            if [ "$BLOCKING" = "true" ]; then
+              echo "::error::slop-detect is BLOCKING and found ${count} anti-pattern(s)"
+              exit 1
+            fi
+            exit 0
+          else
+            echo "::error::detector crashed (exit $rc) — advisory mode does NOT cover a broken detector"
+            exit 1
+          fi
+      - name: Upload findings artifact
+        if: steps.detect.outputs.rc == '2'
+        uses: actions/upload-artifact@v4
+        with:
+          name: slop-findings-${{ github.run_id }}
+          path: /tmp/findings.json
+          retention-days: 14
