@@ -5,6 +5,10 @@ name: floor-typecheck
 on:
   workflow_call:
     inputs:
+      runner:
+        description: "Runner label (self-hosted opt-in; default GitHub-hosted)."
+        type: string
+        default: "ubuntu-latest"
       python-version:
         type: string
         default: "3.11"
@@ -30,7 +34,7 @@ concurrency:
 jobs:
   type_check:
     name: type_check
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     timeout-minutes: 20
     defaults:
       run:
