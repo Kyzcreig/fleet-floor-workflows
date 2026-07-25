@@ -6,6 +6,10 @@ name: floor-js-dep-audit
 on:
   workflow_call:
     inputs:
+      runner:
+        description: "Runner label (self-hosted opt-in; default GitHub-hosted)."
+        type: string
+        default: "ubuntu-latest"
       node-version:
         type: string
         default: "20"
@@ -31,7 +35,7 @@ concurrency:
 jobs:
   dep_audit:
     name: dep_audit
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     timeout-minutes: 20
     defaults:
       run:

@@ -9,6 +9,10 @@ name: floor-dep-audit
 on:
   workflow_call:
     inputs:
+      runner:
+        description: "Runner label (self-hosted opt-in; default GitHub-hosted)."
+        type: string
+        default: "ubuntu-latest"
       python-version:
         type: string
         default: "3.11"
@@ -30,7 +34,7 @@ concurrency:
 jobs:
   dep_audit:
     name: dep_audit
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     timeout-minutes: 20
     defaults:
       run:

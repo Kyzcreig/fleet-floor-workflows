@@ -11,6 +11,10 @@ name: floor-slop-detect
 on:
   workflow_call:
     inputs:
+      runner:
+        description: "Runner label (self-hosted opt-in; default GitHub-hosted)."
+        type: string
+        default: "ubuntu-latest"
       paths:
         description: "Space-separated files/dirs to scan (relative to repo root)."
         type: string
@@ -42,7 +46,7 @@ concurrency:
 jobs:
   slop_detect:
     name: slop_detect
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     timeout-minutes: 10
     outputs:
       findings: ${{ steps.detect.outputs.findings }}

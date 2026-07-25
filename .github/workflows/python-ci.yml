@@ -7,6 +7,10 @@ name: floor-ci
 on:
   workflow_call:
     inputs:
+      runner:
+        description: "Runner label (self-hosted opt-in; default GitHub-hosted)."
+        type: string
+        default: "ubuntu-latest"
       python-version:
         description: "Python version for the runner."
         type: string
@@ -42,7 +46,7 @@ concurrency:
 jobs:
   ci:
     name: ci
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     timeout-minutes: 20
     defaults:
       run:

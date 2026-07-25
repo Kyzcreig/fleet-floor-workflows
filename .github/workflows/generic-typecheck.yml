@@ -6,6 +6,10 @@ name: floor-generic-typecheck
 on:
   workflow_call:
     inputs:
+      runner:
+        description: "Runner label (self-hosted opt-in; default GitHub-hosted)."
+        type: string
+        default: "ubuntu-latest"
       working-directory:
         type: string
         default: "."
@@ -24,7 +28,7 @@ concurrency:
 jobs:
   type_check:
     name: type_check
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     timeout-minutes: 20
     steps:
       - name: generic type_check is a no-op (strength=noop)

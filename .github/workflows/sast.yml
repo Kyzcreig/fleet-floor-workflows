@@ -5,6 +5,10 @@ name: floor-sast
 on:
   workflow_call:
     inputs:
+      runner:
+        description: "Runner label (self-hosted opt-in; default GitHub-hosted)."
+        type: string
+        default: "ubuntu-latest"
       target:
         description: "Path semgrep scans."
         type: string
@@ -34,7 +38,7 @@ concurrency:
 jobs:
   sast:
     name: sast
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     timeout-minutes: 20
     steps:
       - name: Checkout
