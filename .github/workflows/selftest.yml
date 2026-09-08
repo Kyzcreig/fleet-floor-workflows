@@ -186,9 +186,6 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version: "22"
       - name: counts from the reusable-workflow calls must match ground truth
         env:
           SLOP_FINDINGS: ${{ needs.slop.outputs.findings }}
@@ -201,11 +198,14 @@ jobs:
       - name: blocking mode MUST exit nonzero on planted slop (direct)
         run: |
           set -euo pipefail
-          git clone --quiet https://github.com/pbakaus/impeccable /tmp/imp
-          git -C /tmp/imp checkout --quiet f2049c2b76383b444bf30cd6184f7d49a6c580d1
-          (cd /tmp/imp && npm install --omit=dev --omit=optional --ignore-scripts --no-audit --no-fund)
+          # Same pinned engine release + digest the floor defaults to (keep in sync with slop-detect.yml).
+          VER=0.1.3; SHA=afc7a424e0bd6c606b7be4c773c70e87284afbdb41d748eb9a34f8a4478e57da
+          curl -fsSL --retry 3 -o /tmp/imp \
+            "https://github.com/pbakaus/impeccable/releases/download/engine-v${VER}/impeccable-linux-x64"
+          echo "${SHA}  /tmp/imp" | sha256sum -c -
+          chmod +x /tmp/imp
           set +e
-          node /tmp/imp/cli/bin/cli.js detect html-sample/slop.html --json > /dev/null
+          IMPECCABLE_NO_TELEMETRY=1 IMPECCABLE_NO_UPDATE_CHECK=1 /tmp/imp detect --json html-sample/slop.html > /dev/null
           rc=$?
           set -e
           if [ "$rc" -ne 2 ]; then echo "::error::expected exit 2 on planted slop, got $rc"; exit 1; fi
